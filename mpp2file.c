@@ -2,43 +2,56 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <asm/errno.h>
+#include <stdlib.h>
+#include "mpp2file.h"
+#include "mpp2print.h"
 
-ssize_t readline(char *buf, size_t sz, char *fileName, off_t *offset) {
-    int fileDescriptor = open(fileName, O_RDONLY);
-    if (fileDescriptor == -1) {
-        write(STDOUT_FILENO, "head: cannot open '", 19);
-        write(STDOUT_FILENO, fileName, strlen(fileName));
-        write(STDOUT_FILENO, "' for reading: No such file or directory\n", 41);
-        return -1;
+ssize_t openFile(char *fileName) {
+    int fd = open(fileName, O_RDONLY);
+    if (fd == -1) {
+        return ENOENT;
     }
+    return fd;
+}
 
-    ssize_t nchr = 0;
-    ssize_t i = 0;
-    char *p = NULL;
-
-    if ((nchr = lseek(fileDescriptor, *offset, SEEK_SET)) != -1)
-        nchr = read(fileDescriptor, buf, sz);
-    close(fileDescriptor);
-
-    if (nchr == -1) {
-        write(STDOUT_FILENO, "head: cannot read '", 19);
-        write(STDOUT_FILENO, fileName, strlen(fileName));
-        write(STDOUT_FILENO, "'\n", 2);
-        return nchr;
+int countLinesOfFile(char *filename) {
+    char *buffer = (char *) malloc(BUFSIZE);
+    int bytesRead;
+    int lines = 1;
+    int fd = openFile(filename);
+    if (fd == ENOENT) {
+        printError(strerror(ENOENT));
+        return ENOENT;
     }
-
-    if (nchr == 0) return -1; // end of file
-
-    p = buf;
-    while (i < nchr && *p != '\n') p++, i++;
-    *p = 0;
-
-    if (i == nchr) {  // if newline not found
-        *offset += nchr;
-        return 0;
+    bytesRead = read(fd, buffer, sizeof(buffer));
+    while (bytesRead) {
+        for (int i = 0; i < bytesRead; ++i) {
+            if (buffer[i] == '\n' || buffer[i] == 0x0) {
+                lines++;
+            }
+        }
+        bytesRead = read(fd, buffer, sizeof(buffer));
     }
+    free(buffer);
+    return lines;
+}
 
-    *offset += ++i;
-
-    return i;
+long countCharsOfFile(char *filename) {
+    char *buffer = (char *) malloc(BUFSIZE);
+    int bytesRead;
+    int count = 0;
+    int fd = openFile(filename);
+    if (fd == ENOENT) {
+        printError(strerror(ENOENT));
+        return ENOENT;
+    }
+    bytesRead = read(fd, buffer, sizeof(buffer));
+    while (bytesRead) {
+        for (int i = 0; i < bytesRead; ++i) {
+            count++;
+        }
+        bytesRead = read(fd, buffer, sizeof(buffer));
+    }
+    return count;
 }
